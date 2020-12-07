@@ -1,15 +1,15 @@
 #ifndef HASH_TABLE_H
 #define HASH_TABLE_H
 
-#define HASH_TABLE_SIZE 10000000
+#include <sys/stat.h>
+
+#define HASH_TABLE_SIZE 110
 
 typedef struct hash_table_t {
     bool valid;
     unsigned long long key;
     unsigned int value;
 } hash_table_t;
-
-hash_table_t *hash_table;
 
 void hash_table_init();
 
