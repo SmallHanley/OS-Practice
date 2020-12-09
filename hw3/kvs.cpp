@@ -16,133 +16,188 @@ using namespace std;
 #define MEM_OFFSET_CONST 0x7f
 #define FILE_OFFSET_BIT 50
 
-typedef struct {
-    unsigned long long tag;
+typedef struct block_t {
     bool dirty;
-    unsigned int lru;
+    unsigned long long tag;
     char val[BLOCK_NUM][VAL_SIZE + 1];
 } block_t;
 
+int find_file_pos(unsigned long long tag, unsigned int *pos);
+
 int main(int argc, char *argv[])
 {
-    // FILE *fin, *fout, *ftmp;
-    // unsigned long long key1, key2;
-    // unsigned long long tag;
-    // unsigned int offset;
-    // unsigned int fileName;
-    // unsigned int tableNum = 0;
-    // char instr[8];
-    // char buf[1024];
-    // char buf2[1024];
-    // block_t *memTable;
-    // unordered_map<unsigned long long, int> tableIndex;
-    // unordered_map<unsigned long long, int> fileIndex;
+    FILE *fin, *fout, *ftmp1, *ftmp2;
+    unsigned long long key1, key2;
+    unsigned long long tag;
+    unsigned int offset;
+    unsigned int fileName;
+    unsigned int tableNum = 0;
+    char instr[8];
+    char inputBuf[1024];
+    char buf[1024];
+    char buf2[1024];
+    block_t *memTable;
+    unordered_map<unsigned long long, int> tableIndex;
 
-    // memTable = (block_t *) calloc(TABLE_SIZE, sizeof(block_t));
+    memTable = (block_t *) calloc(TABLE_SIZE, sizeof(block_t));
 
-    // if (!(fin = fopen(argv[1], "r"))) {
-    //     fprintf(stderr, "ERROR: unable to open '%s': %s\n\n", argv[1],
-    //             strerror(errno));
-    //     exit(1);
-    // }
-
-    // strncpy(buf, basename(argv[1]), strlen(basename(argv[1])) - 5);
-    // buf[strlen(basename(argv[1])) - 5] = '\0';
-    // strcat(buf, "output");
-
-    // if (!(fout = fopen(buf, "w+"))) {
-    //     fprintf(stderr, "ERROR: unable to open '%s': %s\n\n", argv[1],
-    //             strerror(errno));
-    //     exit(1);
-    // }
-
-    // while (fscanf(fin, "%s", instr) != EOF) {
-    //     if (!strcmp(instr, "PUT")) {
-    //         fscanf(fin, "%llu %s", &key1, buf);
-    //         tag = key1 >> MEM_OFFSET_BIT;
-    //         offset = key1 & MEM_OFFSET_CONST;
-    //         fileName = tag >> FILE_OFFSET_BIT;
-    //         sprintf(buf, "storage/%d.tmp", fileName);
-    //         if (access(buf, 0) < 0) {
-    //             ftmp = fopen(buf, "w+");
-    //             fprintf(ftmp, "0                   \n");
-    //             fclose(ftmp);
-    //         }
-    //         if (!tableIndex[tag]) {
-    //             if (tableNum < TABLE_SIZE) {
-    //                 tableIndex[tag] = ++tableNum;
-    //             }
-    //             else {
-    //                 if (!(ftmp = fopen(buf, "r+"))) {
-    //                     fprintf(stderr, "ERROR: unable to open '%s': %s\n\n",
-    //                             argv[1], strerror(errno));
-    //                     exit(1);
-    //                 }
-    //                 if (!fileIndex[tag]) {
-    //                     unsigned long long fileSize;
-    //                     fscanf(ftmp, "%llu", &fileSize);
-    //                     fileIndex[tag] = ++fileSize;
-    //                     fprintf(ftmp, "-20%llu", fileSize);
-    //                     fwrite()
-    //                 }
-
-    //                 fclose(ftmp);
-    //             }
-    //         }
-    //         memTable[tableIndex[tag] - 1].val[offset][0] = '1';
-    //         memcpy(memTable[tableIndex[tag] - 1].val[offset] + 1, buf,
-    //                VAL_SIZE);
-    //         memTable[tableIndex[tag] - 1].dirty = 1;
-    //     }
-    //     else if (!strcmp(instr, "GET")) {
-    //         fscanf(fin, "%llu", &key1);
-    //         tag = key1 >> MEM_OFFSET_BIT;
-    //         offset = key1 & MEM_OFFSET_CONST;
-    //         if (!tableIndex[tag]) {
-    //         }
-    //         if (memTable[tableIndex[tag] - 1].val[offset][0] == '1') {
-    //             fwrite(memTable[tableIndex[tag] - 1].val[offset] + 1, 1,
-    //                    VAL_SIZE, fout);
-    //         }
-    //         else {
-    //             fprintf(fout, "EMPTY");
-    //         }
-    //         fprintf(fout, "\n");
-    //     }
-    //     else if (!strcmp(instr, "SCAN")) {
-    //         fscanf(fin, "%llu %llu", &key1, &key2);
-    //         for (unsigned long long key = key1; key <= key2; key++) {
-    //             tag = key >> MEM_OFFSET_BIT;
-    //             offset = key & MEM_OFFSET_CONST;
-    //             if (!tableIndex[tag]) {
-    //             }
-    //             if (memTable[tableIndex[tag] - 1].val[offset][0] == '1') {
-    //                 fwrite(memTable[tableIndex[tag] - 1].val[offset] + 1, 1,
-    //                        VAL_SIZE, fout);
-    //             }
-    //             else {
-    //                 fprintf(fout, "EMPTY");
-    //             }
-    //             fprintf(fout, "\n");
-    //         }
-    //     }
-    //     else {
-    //         fprintf(stderr, "ERROR: instruction not found\n\n");
-    //         exit(1);
-    //     }
-    // }
-
-    // free(memTable);
-    // fclose(fin);
-    // fclose(fout);
     hash_table_init();
-    for(int i = 0; i < 100; i++){
-        hash_table_put(i, i);
+
+    printf("%d\n", RAND_MAX);
+
+    if (!(fin = fopen(argv[1], "r"))) {
+        fprintf(stderr, "ERROR: unable to open '%s': %s\n\n", argv[1],
+                strerror(errno));
+        exit(1);
     }
-    for(int i = 0; i < 100; i++){
-        unsigned int value;
-        hash_table_get(i, &value);
-        printf("%d %u\n", i, value);
+
+    strncpy(buf, basename(argv[1]), strlen(basename(argv[1])) - 5);
+    buf[strlen(basename(argv[1])) - 5] = '\0';
+    strcat(buf, "output");
+
+    if (!(fout = fopen(buf, "w+"))) {
+        fprintf(stderr, "ERROR: unable to open '%s': %s\n\n", buf,
+                strerror(errno));
+        exit(1);
     }
+
+    while (fscanf(fin, "%s", instr) != EOF) {
+        if (!strcmp(instr, "PUT")) {
+            fscanf(fin, "%llu %s", &key1, inputBuf);
+            tag = key1 >> MEM_OFFSET_BIT;
+            offset = key1 & MEM_OFFSET_CONST;
+            fileName = tag >> FILE_OFFSET_BIT;
+            sprintf(buf, "storage/%d.tmp", fileName);
+            if (access(buf, 0) < 0) {
+                ftmp1 = fopen(buf, "w+");
+                fprintf(ftmp1, "0                   \n");
+                fclose(ftmp1);
+            }
+            if (!tableIndex[tag]) {
+                if (tableNum < TABLE_SIZE) {
+                    tableIndex[tag] = ++tableNum;
+                }
+                else {
+                    if (!(ftmp1 = fopen(buf, "r+"))) {
+                        fprintf(stderr, "ERROR: unable to open '%s': %s\n\n",
+                                buf, strerror(errno));
+                        exit(1);
+                    }
+                    if(memTable[0].dirty){
+                        unsigned int fileName2 = memTable[0].tag >> FILE_OFFSET_BIT;
+                        unsigned int pos;
+                        sprintf(buf2, "storage/%d.tmp", fileName2);
+                        if (!(ftmp2 = fopen(buf2, "r+"))) {
+                            fprintf(stderr, "ERROR: unable to open '%s': %s\n\n",
+                                    buf2, strerror(errno));
+                            exit(1);
+                        }
+                        fseek(ftmp2, 0, SEEK_SET);
+                        fscanf(ftmp2, "%u", &pos);
+                        if(find_file_pos(memTable[0].tag, &pos)){
+                            fseek(ftmp2, 0, SEEK_SET);
+                            fprintf(ftmp2, "%-20u\n", pos + 1);
+                        }
+                        fseek(ftmp2, 21 + pos * BLOCK_NUM * (VAL_SIZE + 1), SEEK_SET);
+                        fwrite(memTable[0].val, 1, BLOCK_NUM * (VAL_SIZE + 1), ftmp2);
+                        fclose(ftmp2);
+                    }
+                    unsigned int pos;
+                    fseek(ftmp1, 0, SEEK_SET);
+                    fscanf(ftmp1, "%u", &pos);
+                    if(find_file_pos(memTable[0].tag, &pos)){
+                        fseek(ftmp1, 0, SEEK_SET);
+                        fprintf(ftmp1, "%-20u\n", pos + 1);
+                    }
+                    else{
+                        fseek(ftmp1, 21 + pos * BLOCK_NUM * (VAL_SIZE + 1), SEEK_SET);
+                        fread(memTable[0].val, 1, BLOCK_NUM * (VAL_SIZE + 1), ftmp1);
+                    }
+                    fclose(ftmp1);
+                    tableIndex[tag] = 1;
+                }
+                memTable[tableIndex[tag] - 1].tag = tag;
+            }
+            memTable[tableIndex[tag] - 1].val[offset][0] = '1';
+            memcpy(memTable[tableIndex[tag] - 1].val[offset] + 1, inputBuf,
+                   VAL_SIZE);
+            memTable[tableIndex[tag] - 1].dirty = 1;
+        }
+        else if (!strcmp(instr, "GET")) {
+            fscanf(fin, "%llu", &key1);
+            // tag = key1 >> MEM_OFFSET_BIT;
+            // offset = key1 & MEM_OFFSET_CONST;
+            // if (!tableIndex[tag]) {
+            // }
+            // if (memTable[tableIndex[tag] - 1].val[offset][0] == '1') {
+            //     fwrite(memTable[tableIndex[tag] - 1].val[offset] + 1, 1,
+            //            VAL_SIZE, fout);
+            // }
+            // else {
+            //     fprintf(fout, "EMPTY");
+            // }
+            // fprintf(fout, "\n");
+        }
+        else if (!strcmp(instr, "SCAN")) {
+            fscanf(fin, "%llu %llu", &key1, &key2);
+            // for (unsigned long long key = key1; key <= key2; key++) {
+            //     tag = key >> MEM_OFFSET_BIT;
+            //     offset = key & MEM_OFFSET_CONST;
+            //     if (!tableIndex[tag]) {
+            //     }
+            //     if (memTable[tableIndex[tag] - 1].val[offset][0] == '1') {
+            //         fwrite(memTable[tableIndex[tag] - 1].val[offset] + 1, 1,
+            //                VAL_SIZE, fout);
+            //     }
+            //     else {
+            //         fprintf(fout, "EMPTY");
+            //     }
+            //     fprintf(fout, "\n");
+            // }
+        }
+        else {
+            fprintf(stderr, "ERROR: instruction not found\n\n");
+            exit(1);
+        }
+    }
+
+    for(int i = 0; i < TABLE_SIZE; i++){
+        if(memTable[i].dirty){
+            unsigned int fileName2 = memTable[0].tag >> FILE_OFFSET_BIT;
+            unsigned int pos;
+            sprintf(buf2, "storage/%d.tmp", fileName2);
+            if (!(ftmp2 = fopen(buf2, "r+"))) {
+                fprintf(stderr, "ERROR: unable to open '%s': %s\n\n",
+                        buf2, strerror(errno));
+                exit(1);
+            }
+            fseek(ftmp2, 0, SEEK_SET);
+            fscanf(ftmp2, "%u", &pos);
+            if(find_file_pos(memTable[0].tag, &pos)){
+                fseek(ftmp2, 0, SEEK_SET);
+                fprintf(ftmp2, "%-20u\n", pos + 1);
+            }
+            fseek(ftmp2, 21 + pos * BLOCK_NUM * (VAL_SIZE + 1), SEEK_SET);
+            fwrite(memTable[i].val, 1, BLOCK_NUM * (VAL_SIZE + 1), ftmp2);
+            fclose(ftmp2);
+        }
+    }
+
+    hash_table_close();
+    free(memTable);
+    fclose(fin);
+    fclose(fout);
     return 0;
+}
+
+int find_file_pos(unsigned long long tag, unsigned int *pos){
+    unsigned int value;
+    if(hash_table_get(tag, &value)){
+        hash_table_put(tag, *pos);
+        return -1;
+    }
+    else{
+        *pos = value;
+        return 0;
+    }
 }

@@ -1,3 +1,5 @@
 storage
 kvs
 *.o
+*.output
+*.input

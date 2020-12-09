@@ -1,10 +1,9 @@
 CFLAGS = -g -Wall -std=c++11
 CC = g++
-INPUT = ../hw3_test/hw3example.input
+INPUT = /media/sf_ubuntu_20.04/hw3_test/hw3example.input
 
 kvs: kvs.o hash_table.o
 	$(CC) -o $@ $^ 
-	./kvs $(INPUT)
 
 run:
 	./kvs $(INPUT)

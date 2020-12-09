@@ -3,7 +3,7 @@
 
 #include <sys/stat.h>
 
-#define HASH_TABLE_SIZE 110
+#define HASH_TABLE_SIZE 50000000
 
 typedef struct hash_table_t {
     bool valid;
