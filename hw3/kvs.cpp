@@ -11,7 +11,7 @@ using namespace std;
 
 #define BLOCK_NUM 128
 #define VAL_SIZE 128
-#define TABLE_SIZE 10
+#define TABLE_SIZE 100000
 #define MEM_OFFSET_BIT 7
 #define MEM_OFFSET_CONST 0x7f
 #define FILE_OFFSET_BIT 50
@@ -43,8 +43,6 @@ int main(int argc, char *argv[])
 
     hash_table_init();
 
-    printf("%d\n", RAND_MAX);
-
     if (!(fin = fopen(argv[1], "r"))) {
         fprintf(stderr, "ERROR: unable to open '%s': %s\n\n", argv[1],
                 strerror(errno));
@@ -60,7 +58,7 @@ int main(int argc, char *argv[])
                 strerror(errno));
         exit(1);
     }
-
+    
     while (fscanf(fin, "%s", instr) != EOF) {
         if (!strcmp(instr, "PUT")) {
             fscanf(fin, "%llu %s", &key1, inputBuf);
@@ -83,7 +81,8 @@ int main(int argc, char *argv[])
                                 buf, strerror(errno));
                         exit(1);
                     }
-                    if(memTable[0].dirty){
+                    int discard = rand() % TABLE_SIZE;
+                    if(memTable[discard].dirty){
                         unsigned int fileName2 = memTable[0].tag >> FILE_OFFSET_BIT;
                         unsigned int pos;
                         sprintf(buf2, "storage/%d.tmp", fileName2);
@@ -99,7 +98,7 @@ int main(int argc, char *argv[])
                             fprintf(ftmp2, "%-20u\n", pos + 1);
                         }
                         fseek(ftmp2, 21 + pos * BLOCK_NUM * (VAL_SIZE + 1), SEEK_SET);
-                        fwrite(memTable[0].val, 1, BLOCK_NUM * (VAL_SIZE + 1), ftmp2);
+                        fwrite(memTable[discard].val, 1, BLOCK_NUM * (VAL_SIZE + 1), ftmp2);
                         fclose(ftmp2);
                     }
                     unsigned int pos;
@@ -111,10 +110,10 @@ int main(int argc, char *argv[])
                     }
                     else{
                         fseek(ftmp1, 21 + pos * BLOCK_NUM * (VAL_SIZE + 1), SEEK_SET);
-                        fread(memTable[0].val, 1, BLOCK_NUM * (VAL_SIZE + 1), ftmp1);
+                        fread(memTable[discard].val, 1, BLOCK_NUM * (VAL_SIZE + 1), ftmp1);
                     }
                     fclose(ftmp1);
-                    tableIndex[tag] = 1;
+                    tableIndex[tag] = discard + 1;
                 }
                 memTable[tableIndex[tag] - 1].tag = tag;
             }

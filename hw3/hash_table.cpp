@@ -33,7 +33,15 @@ void hash_table_init()
     hash_table = (hash_table_t *) mmap(
         NULL, statbuf.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
+    madvise(hash_table, HASH_TABLE_SIZE * sizeof(hash_table_t), MADV_RANDOM);
+
     close(fd);
+
+    // f = fopen("storage/hash_table.tmp", "r+");
+    // hash_table = (hash_table_t*)malloc(HASH_TABLE_SIZE * sizeof(hash_table_t));
+    // fread(hash_table, 1, HASH_TABLE_SIZE * sizeof(hash_table_t), f);
+
+    // fclose(f);
 }
 
 void hash_table_put(unsigned long long key, unsigned int value)
@@ -63,11 +71,18 @@ int hash_table_get(unsigned long long key, unsigned int *value)
 }
 
 void hash_table_close()
-{
+{   
+    // FILE *f;
+
     int err = munmap(hash_table, statbuf.st_size);
 
     if (err) {
         fprintf(stderr, "ERROR: unmao error: %s\n\n", strerror(errno));
         exit(1);
     }
+
+    // f = fopen("storage/hash_table.tmp", "r+");
+    // fwrite(hash_table, 1, HASH_TABLE_SIZE * sizeof(hash_table_t), f);
+    // free(hash_table);
+    // fclose(f);
 }
