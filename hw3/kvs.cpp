@@ -1,6 +1,7 @@
 #include <libgen.h>
-#include <unistd.h>
+#include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -10,12 +11,12 @@
 #include "hash_table.h"
 using namespace std;
 
-#define BLOCK_NUM 128
+#define BLOCK_NUM 4
 #define VAL_SIZE 128
-#define TABLE_SIZE 1
-#define MEM_OFFSET_BIT 7
-#define MEM_OFFSET_CONST 0x7f
-#define FILE_OFFSET_BIT 50
+#define TABLE_SIZE 5000000
+#define MEM_OFFSET_BIT 2
+#define MEM_OFFSET_CONST 0x3
+#define FILE_OFFSET_BIT 55
 
 typedef struct block_t {
     bool dirty;
@@ -36,16 +37,21 @@ int main(int argc, char *argv[])
     unsigned int pos;
     char instr[8];
     char inputBuf[1024];
+    char out[1024];
     char buf[1024];
     char buf2[1024];
     block_t *memTable;
     unordered_map<unsigned long long, int> tableIndex;
+    clock_t t1, t2;
+    int count, miss;
+
+    t1 = clock();
 
     memTable = (block_t *) calloc(TABLE_SIZE, sizeof(block_t));
 
     srand(time(NULL));
 
-    hash_table_init();
+    count = miss = 0;
 
     if (!(fin = fopen(argv[1], "r"))) {
         fprintf(stderr, "ERROR: unable to open '%s': %s\n\n", argv[1],
@@ -53,17 +59,25 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    strncpy(buf, basename(argv[1]), strlen(basename(argv[1])) - 5);
-    buf[strlen(basename(argv[1])) - 5] = '\0';
-    strcat(buf, "output");
+    strncpy(out, basename(argv[1]), strlen(basename(argv[1])) - 5);
+    out[strlen(basename(argv[1])) - 5] = '\0';
+    strcat(out, "output");
 
-    if (!(fout = fopen(buf, "w+"))) {
-        fprintf(stderr, "ERROR: unable to open '%s': %s\n\n", buf,
+    if (!(fout = fopen(out, "w+"))) {
+        fprintf(stderr, "ERROR: unable to open '%s': %s\n\n", out,
                 strerror(errno));
         exit(1);
     }
 
+    struct stat st = {0};
+    if (stat("storage", &st) == -1) {
+        mkdir("storage", S_IRWXU | S_IRWXG | S_IRWXO);
+    }
+
+    hash_table_init();
+
     while (fscanf(fin, "%s", instr) != EOF) {
+        count++;
         if (!strcmp(instr, "PUT")) {
             fscanf(fin, "%llu %s", &key1, inputBuf);
             tag = key1 >> MEM_OFFSET_BIT;
@@ -112,10 +126,13 @@ int main(int argc, char *argv[])
                     if (find_file_pos(tag, &pos)) {
                         fseek(ftmp1, 0, SEEK_SET);
                         fprintf(ftmp1, "%-20u\n", pos + 1);
-                        truncate(buf, 21 + (pos + 1) * BLOCK_NUM * (VAL_SIZE + 1));
+                        truncate(buf,
+                                 21 + (pos + 1) * BLOCK_NUM * (VAL_SIZE + 1));
                     }
-                    fseek(ftmp1, 21 + pos * BLOCK_NUM * (VAL_SIZE + 1), SEEK_SET);
-                    fread(memTable[discard].val, (VAL_SIZE + 1), BLOCK_NUM, ftmp1);
+                    fseek(ftmp1, 21 + pos * BLOCK_NUM * (VAL_SIZE + 1),
+                          SEEK_SET);
+                    fread(memTable[discard].val, (VAL_SIZE + 1), BLOCK_NUM,
+                          ftmp1);
                     fclose(ftmp1);
                     tableIndex[tag] = discard + 1;
                 }
@@ -139,17 +156,19 @@ int main(int argc, char *argv[])
             }
             if (!tableIndex[tag]) {
                 if (!(ftmp1 = fopen(buf, "r+"))) {
-                    fprintf(stderr, "ERROR: unable to open '%s': %s\n\n",
-                            buf, strerror(errno));
+                    fprintf(stderr, "ERROR: unable to open '%s': %s\n\n", buf,
+                            strerror(errno));
                     exit(1);
                 }
                 int discard = rand() % TABLE_SIZE;
                 tableIndex.erase(memTable[discard].tag);
                 if (memTable[discard].dirty) {
-                    unsigned int fileName2 = memTable[discard].tag >> FILE_OFFSET_BIT;
+                    unsigned int fileName2 =
+                        memTable[discard].tag >> FILE_OFFSET_BIT;
                     sprintf(buf2, "storage/%u.tmp", fileName2);
                     if (!(ftmp2 = fopen(buf2, "r+"))) {
-                        fprintf(stderr, "ERROR: unable to open '%s': %s\n\n", buf2, strerror(errno));
+                        fprintf(stderr, "ERROR: unable to open '%s': %s\n\n",
+                                buf2, strerror(errno));
                         exit(1);
                     }
                     fscanf(ftmp2, "%u", &pos);
@@ -157,8 +176,10 @@ int main(int argc, char *argv[])
                         fseek(ftmp2, 0, SEEK_SET);
                         fprintf(ftmp2, "%-20u\n", pos + 1);
                     }
-                    fseek(ftmp2, 21 + pos * BLOCK_NUM * (VAL_SIZE + 1), SEEK_SET);
-                    fwrite(memTable[discard].val, 1, BLOCK_NUM * (VAL_SIZE + 1), ftmp2);
+                    fseek(ftmp2, 21 + pos * BLOCK_NUM * (VAL_SIZE + 1),
+                          SEEK_SET);
+                    fwrite(memTable[discard].val, 1, BLOCK_NUM * (VAL_SIZE + 1),
+                           ftmp2);
                     fclose(ftmp2);
                 }
                 fscanf(ftmp1, "%u", &pos);
@@ -168,7 +189,8 @@ int main(int argc, char *argv[])
                     truncate(buf, 21 + (pos + 1) * BLOCK_NUM * (VAL_SIZE + 1));
                 }
                 fseek(ftmp1, 21 + pos * BLOCK_NUM * (VAL_SIZE + 1), SEEK_SET);
-                fread(memTable[discard].val, 1, BLOCK_NUM * (VAL_SIZE + 1), ftmp1);
+                fread(memTable[discard].val, 1, BLOCK_NUM * (VAL_SIZE + 1),
+                      ftmp1);
                 fclose(ftmp1);
                 tableIndex[tag] = discard + 1;
                 memTable[discard].dirty = false;
@@ -204,10 +226,13 @@ int main(int argc, char *argv[])
                     int discard = rand() % TABLE_SIZE;
                     tableIndex.erase(memTable[discard].tag);
                     if (memTable[discard].dirty) {
-                        unsigned int fileName2 = memTable[discard].tag >> FILE_OFFSET_BIT;
+                        unsigned int fileName2 =
+                            memTable[discard].tag >> FILE_OFFSET_BIT;
                         sprintf(buf2, "storage/%u.tmp", fileName2);
                         if (!(ftmp2 = fopen(buf2, "r+"))) {
-                            fprintf(stderr, "ERROR: unable to open '%s': %s\n\n", buf2, strerror(errno));
+                            fprintf(stderr,
+                                    "ERROR: unable to open '%s': %s\n\n", buf2,
+                                    strerror(errno));
                             exit(1);
                         }
                         fscanf(ftmp2, "%u", &pos);
@@ -215,18 +240,23 @@ int main(int argc, char *argv[])
                             fseek(ftmp2, 0, SEEK_SET);
                             fprintf(ftmp2, "%-20u\n", pos + 1);
                         }
-                        fseek(ftmp2, 21 + pos * BLOCK_NUM * (VAL_SIZE + 1), SEEK_SET);
-                        fwrite(memTable[discard].val, 1, BLOCK_NUM * (VAL_SIZE + 1), ftmp2);
+                        fseek(ftmp2, 21 + pos * BLOCK_NUM * (VAL_SIZE + 1),
+                              SEEK_SET);
+                        fwrite(memTable[discard].val, 1,
+                               BLOCK_NUM * (VAL_SIZE + 1), ftmp2);
                         fclose(ftmp2);
                     }
                     fscanf(ftmp1, "%u", &pos);
                     if (find_file_pos(tag, &pos)) {
                         fseek(ftmp1, 0, SEEK_SET);
                         fprintf(ftmp1, "%-20u\n", pos + 1);
-                        truncate(buf, 21 + (pos + 1) * BLOCK_NUM * (VAL_SIZE + 1));
+                        truncate(buf,
+                                 21 + (pos + 1) * BLOCK_NUM * (VAL_SIZE + 1));
                     }
-                    fseek(ftmp1, 21 + pos * BLOCK_NUM * (VAL_SIZE + 1), SEEK_SET);
-                    fread(memTable[discard].val, 1, BLOCK_NUM * (VAL_SIZE + 1), ftmp1);
+                    fseek(ftmp1, 21 + pos * BLOCK_NUM * (VAL_SIZE + 1),
+                          SEEK_SET);
+                    fread(memTable[discard].val, 1, BLOCK_NUM * (VAL_SIZE + 1),
+                          ftmp1);
                     fclose(ftmp1);
                     tableIndex[tag] = discard + 1;
                     memTable[discard].dirty = false;
@@ -234,7 +264,7 @@ int main(int argc, char *argv[])
                 memTable[tableIndex[tag] - 1].tag = tag;
                 if (memTable[tableIndex[tag] - 1].val[offset][0] == '1') {
                     fwrite(memTable[tableIndex[tag] - 1].val[offset] + 1, 1,
-                        VAL_SIZE, fout);
+                           VAL_SIZE, fout);
                 }
                 else {
                     fprintf(fout, "EMPTY");
@@ -272,7 +302,12 @@ int main(int argc, char *argv[])
     hash_table_close();
     free(memTable);
     fclose(fin);
-    fclose(fout);
+    if (access(out, 0) > -1) {
+        fclose(fout);
+    }
+    t2 = clock();
+    printf("Time: %f\n", (double) (t2 - t1) / CLOCKS_PER_SEC);
+
     return 0;
 }
 
